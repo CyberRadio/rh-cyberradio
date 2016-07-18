@@ -1,0 +1,16 @@
+--- input_ports.py.orig	2016-07-04 09:15:30.611899991 -0400
++++ input_ports.py	2016-07-04 09:15:44.381899983 -0400
+@@ -201,11 +201,12 @@
+         finally:
+             self.port_lock.release()
+ 
+-class InDigitalTunerPort(FRONTEND__POA.DigitalTuner):
++class InDigitalTunerPort(FRONTEND__POA.DigitalTuner, InAnalogTunerPort):
+     def __init__(self, name, parent=digital_tuner_delegation()):
+         self.name = name
+         self.port_lock = threading.Lock()
+         self.parent = parent
++        InAnalogTunerPort.__init__(self,name,parent)
+         
+     def setTunerOutputSampleRate(self, id, sr):
+         self.port_lock.acquire()
