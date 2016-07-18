@@ -1,0 +1,8 @@
+d5262ae9cf1e5765967298822d10e60e  main.cpp
+8bfcd22353c3a57fee561ad86ee2a56b  reconf
+21bb91df39e701ca39e8a49af5caadf2  SinkVITA49_base.h
+932f8277bcc616cd12e9e35413010291  configure.ac
+3bd70a5210734169f34038c8f0e78b66  Makefile.am
+dafd1a6f3ab3097bda21646e807bcb43  struct_props.h
+b87651ea3565402473fb088004430fbf  build.sh
+e7c8639de19188de36377356d7cf9960  SinkVITA49_base.cpp
