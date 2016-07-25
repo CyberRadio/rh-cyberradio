@@ -44,9 +44,8 @@ class NDRFEI_base(CF__POA.Device, FrontendTunerDevice, digital_tuner_delegation,
             self.port_GPS_in = frontend.InGPSPort("GPS_in")
             self.port_RFInfo_in = frontend.InRFInfoPort("RFInfo_in")
             self.port_DigitalTuner_in = frontend.InDigitalTunerPort("DigitalTuner_in")
-            self.port_dataFloatTX_in = bulkio.InFloatPort("dataFloatTX_in", maxsize=self.DEFAULT_QUEUE_SIZE)
             self.port_dataShortTx_in = bulkio.InShortPort("dataShortTx_in", maxsize=self.DEFAULT_QUEUE_SIZE)
-            self.port_dataFloat_out = bulkio.OutFloatPort("dataFloat_out")
+            self.port_dataShortLB_in = bulkio.InShortPort("dataShortLB_in", maxsize=self.DEFAULT_QUEUE_SIZE)
             self.port_RFInfoTX_out = frontend.OutRFInfoPort("RFInfoTX_out")
             self.port_dataShort_out = bulkio.OutShortPort("dataShort_out")
             self.addPropertyChangeListener('connectionTable',self.updated_connectionTable)
@@ -65,7 +64,6 @@ class NDRFEI_base(CF__POA.Device, FrontendTunerDevice, digital_tuner_delegation,
                 raise CF.Resource.StopError(CF.CF_NOTSET, "Processing thread did not die")
 
         def updated_connectionTable(self, id, oldval, newval):
-            self.port_dataFloat_out.updateConnectionFilter(newval)
             self.port_dataShort_out.updateConnectionFilter(newval)
 
         def releaseObject(self):
@@ -93,17 +91,13 @@ class NDRFEI_base(CF__POA.Device, FrontendTunerDevice, digital_tuner_delegation,
                                             repid="IDL:FRONTEND/DigitalTuner:1.0",
                                             type_="control")
 
-        port_dataFloatTX_in = providesport(name="dataFloatTX_in",
-                                           repid="IDL:BULKIO/dataFloat:1.0",
-                                           type_="data")
-
         port_dataShortTx_in = providesport(name="dataShortTx_in",
                                            repid="IDL:BULKIO/dataShort:1.0",
                                            type_="data")
 
-        port_dataFloat_out = usesport(name="dataFloat_out",
-                                      repid="IDL:BULKIO/dataFloat:1.0",
-                                      type_="data")
+        port_dataShortLB_in = providesport(name="dataShortLB_in",
+                                           repid="IDL:BULKIO/dataShort:1.0",
+                                           type_="data")
 
         port_RFInfoTX_out = usesport(name="RFInfoTX_out",
                                      repid="IDL:FRONTEND/RFInfo:1.0",
@@ -313,7 +307,6 @@ class NDRFEI_base(CF__POA.Device, FrontendTunerDevice, digital_tuner_delegation,
             self.connectionTableChanged(old_table, self.connectionTable)
 
         def connectionTableChanged(self, oldValue, newValue):
-            self.port_dataFloat_out.updateConnectionFilter(newValue)
             self.port_dataShort_out.updateConnectionFilter(newValue)
 
         def removeListener(self,listen_alloc_id):
@@ -325,12 +318,6 @@ class NDRFEI_base(CF__POA.Device, FrontendTunerDevice, digital_tuner_delegation,
                 if entry.connection_id == listen_alloc_id:
                     self.connectionTable.remove(entry)
 
-            # Check to see if port "port_dataFloat_out" has a connection for this listener
-            tmp = self.port_dataFloat_out._get_connections()
-            for i in range(len(self.port_dataFloat_out._get_connections())):
-                connection_id = tmp[i].connectionId
-                if connection_id == listen_alloc_id:
-                    self.port_dataFloat_out.disconnectPort(connection_id)
             # Check to see if port "port_dataShort_out" has a connection for this listener
             tmp = self.port_dataShort_out._get_connections()
             for i in range(len(self.port_dataShort_out._get_connections())):
@@ -396,10 +383,6 @@ class NDRFEI_base(CF__POA.Device, FrontendTunerDevice, digital_tuner_delegation,
 
             old_table = self.connectionTable;
             tmp = bulkio.connection_descriptor_struct()
-            tmp.connection_id = allocation_id
-            tmp.port_name = "port_dataFloat_out"
-            tmp.stream_id = stream_id
-            self.connectionTable.append(tmp)
             tmp.connection_id = allocation_id
             tmp.port_name = "port_dataShort_out"
             tmp.stream_id = stream_id

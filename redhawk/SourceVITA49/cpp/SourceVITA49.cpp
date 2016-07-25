@@ -56,6 +56,7 @@ SourceVITA49_base(uuid, label), Bank2(numBuffers), workQueue2(numBuffers) {
     // add port listener
     dataShort_out->setNewConnectListener(this, &SourceVITA49_i::newConnectCallback);
 
+    addPropertyChangeListener("streamID", this, &SourceVITA49_i::streamidPropChanged);
     addPropertyChangeListener("interface", this, &SourceVITA49_i::interfacePropChanged);
     addPropertyChangeListener("advanced_configuration", this, &SourceVITA49_i::advancedConfigurationChanged);
     addPropertyChangeListener("VITA49Processing_override", this, &SourceVITA49_i::vita49ProcessingChanged);
@@ -675,6 +676,11 @@ void SourceVITA49_i::interfacePropChanged(const std::string* oldVal, const std::
     interface = *newVal;
     curr_attach.eth_dev = interface;
     destroy_rx_thread();
+}
+
+void SourceVITA49_i::streamidPropChanged(const std::string* oldVal, const std::string* newVal) {
+    boost::mutex::scoped_lock lock(property_lock);
+    streamID = *newVal;
 }
 
 void SourceVITA49_i::vita49ProcessingChanged(const VITA49Processing_override_struct* oldVal,

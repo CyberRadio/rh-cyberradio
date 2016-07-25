@@ -1,25 +1,6 @@
-#
-# This file is protected by Copyright. Please refer to the COPYRIGHT file
-# distributed with this source distribution.
-#
-# This file is part of REDHAWK.
-#
-# REDHAWK is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Lesser General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# REDHAWK is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
-# for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with this program.  If not, see http://www.gnu.org/licenses/.
-#
 # By default, the RPM will install to the standard REDHAWK SDR root location (/var/redhawk/sdr)
 # You can override this at install time using --prefix /new/sdr/root when invoking rpm (preferred method, if you must)
-%{!?_sdrroot: %define _sdrroot /var/redhawk/sdr}
+%{!?_sdrroot: %global _sdrroot /var/redhawk/sdr}
 %define _prefix %{_sdrroot}
 Prefix:         %{_prefix}
 
@@ -35,23 +16,19 @@ Release:        1%{?dist}
 Summary:        Component %{name}
 
 Group:          REDHAWK/Components
-License:        LGPLv3+
+License:        None
 Source0:        %{name}-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires:  redhawk-devel >= 2.0
 Requires:       redhawk >= 2.0
 
-# Shared library requirements
 BuildRequires:  rh.VITA49-devel
 Requires:       rh.VITA49
 
 # Interface requirements
 BuildRequires:  bulkioInterfaces >= 2.0
 Requires:       bulkioInterfaces >= 2.0
-
-# Allow upgrades from previous package name
-Obsoletes:      SourceVITA49 < 3.0.0
 
 
 %description

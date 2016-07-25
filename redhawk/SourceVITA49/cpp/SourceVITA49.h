@@ -122,6 +122,8 @@ private:
             const attachment_override_struct* newVal);
     void interfacePropChanged(const std::string* oldVal,
             const std::string* newVal);
+    void streamidPropChanged(const std::string* oldVal,
+            const std::string* newVal);
     void vita49ProcessingChanged(const VITA49Processing_override_struct* oldVal,
             const VITA49Processing_override_struct* newVal);
 

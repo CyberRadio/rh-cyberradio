@@ -216,4 +216,9 @@ Rule 6.1.6.2-2: When link-efficient packing is implemented all bits in each 32-b
     </simple>
     <configurationkind kindtype="configure"/>
   </struct>
+  <simple id="streamID" mode="readwrite" name="streamID" type="string">
+    <value>streamID</value>
+    <kind kindtype="property"/>
+    <action type="external"/>
+  </simple>
 </properties>

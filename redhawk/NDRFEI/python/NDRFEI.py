@@ -105,15 +105,10 @@ class NDRFEI_i(NDRFEI_base):
         # attenuation
         ## TODO: add attenuation control      
         
-        # create lists to hold the vita49 and dataconverter objects
+        # create lists to hold the vita49 objects
         self.SV49=[]
-        self.DC=[]
-        self.RPorts=[]
         self.Tx_SV49=[]
-        self.Tx_DC=[]
-        self.TPorts=[]
-        self.RSink=[]
-        self.sock=[]
+        self.Tx_SV49_ports=[]
         self.sris=[]
         
         # get a copy of the full unit configuration
@@ -287,48 +282,72 @@ class NDRFEI_i(NDRFEI_base):
             
         """
         
-        # got through each RX connection and check for data        
+        # go through each RX connection and check for data     
         for tuner_id in range(0,len(self.SV49)):
             # make sure enabled before continuing
+            # note: the loop back port is a multiport so there 
+            # is no mapping between tuner_id and the packet since the routing is handled
+            # via the streamID but by checking for packets once per enabled tuner the 
+            # load is balanced, e.g. more packet checks with more tuners, so TX and RX don't 
+            # starve one another for resources
             if self.frontend_tuner_status[tuner_id].enabled == False:
                 continue
-                        
-            #TODO: Connect receive data to out port
-#             # receive some data
-#             data = array.array('f',range(8192))
-#             bytes_rxed = 0
-#             while (len(data) > 0) and (bytes_rxed<65536):
-#                 try:
-#                     data = self.sock[tuner_id].recv(8192)
-#                 except socket.error:
-#                     data=[]
-#                     continue            
-#                 bytes_rxed = bytes_rxed + len(data)
-#                                   
-#             print "Data rxed = %d %d %s"%(tuner_id,bytes_rxed,self.frontend_tuner_status[tuner_id].allocation_id_csv)
-#                         
-#             # send out to each connection with stream_id
-#             datab = range(1024)
-#             tstamp = bulkio.timestamp.now()
-#             self.sri = bulkio.sri.create(self.frontend_tuner_status[tuner_id].allocation_id_csv)
-#             self.sri.mode=1
-#             
-#             try:
-#                 self.port_dataFloat_out.pushSRI(self.sri)
-#                 self.port_dataFloat_out.pushPacket(data,tstamp,False,self.frontend_tuner_status[tuner_id].allocation_id_csv)
-#             except:
-#                 print "Push exception!"
-#                 print self.frontend_tuner_status[tuner_id].allocation_id_csv
-#                 continue
+            
+            # check for loopback packet
+            packet = self.port_dataShortLB_in.getPacket()
+            
+            if packet.dataBuffer is None:
+                continue
+            
+            # report size
+            self._log.debug("Data rxed = %d %d %s %s"%(tuner_id,len(packet.dataBuffer),packet.SRI.streamID,self.frontend_tuner_status[tuner_id].allocation_id_csv))
 
-        for tuner_id in range(0,len(self.Tx_SV49)):
-            # make sure enabled before continuing
-            tx_id = tuner_id + self.numDdc 
-            if self.frontend_tuner_status[tx_id].enabled == False:
+            # force complex mode
+            packet.SRI.mode=1
+            
+            # forward SRI if channged
+            if packet.sriChanged:
+                self.port_dataShort_out.pushSRI(packet.SRI)
+                self._log.debug("SRI changed")
+                
+            # forward the data packet
+            try:
+                self.port_dataShort_out.pushSRI(packet.SRI)
+                self.port_dataShort_out.pushPacket(packet.dataBuffer,packet.T,packet.EOS,packet.SRI.streamID)
+            except:
+                self._log.debug("Push exception!")
+                self._log.debug("%s"%(packet.SRI.streamID))
+                self._log.debug("%s"%(self.frontend_tuner_status[tuner_id].allocation_id_csv))
                 continue
 
-            #TODO: Connect transmit data to data converter
+        for tx_id in range(0,len(self.Tx_SV49)):
+            # make sure enabled before continuing
+            tuner_id = tx_id + self.numDdc
+            if self.frontend_tuner_status[tuner_id].enabled == False:
+                continue
+
+            # check for transmit packet
+            packet = self.port_dataShortTx_in.getPacket()
+            
+            # skip if no data
+            if packet.dataBuffer is None:
+                continue           
+            
+            # forward to correct sink block based on the streamID
+            for tx_id in range(0,len(self.Tx_SV49)):
+                tuner_id = tx_id + self.numDdc
+                if self.frontend_tuner_status[tuner_id].allocation_id_csv == packet.SRI.streamID:
+                    # report size
+                    self._log.debug("Data txed = %d %d %s %s"%(tx_id,len(packet.dataBuffer),packet.SRI.streamID,self.frontend_tuner_status[tuner_id].allocation_id_csv))
+
+                    # set the streamID to the UDP port number
+                    packet.SRI.streamID = "%d"%(self.Tx_SV49[tx_id].network_settings.port)
                     
+                    # send data
+                    self.Tx_SV49_ports[tx_id].pushSRI(packet.SRI)
+                    self.Tx_SV49_ports[tx_id].pushPacket(packet.dataBuffer,packet.T,packet.EOS,packet.SRI.streamID)
+                     
+            
         return NORMAL
 
     '''
@@ -346,16 +365,13 @@ class NDRFEI_i(NDRFEI_base):
             # Note: Radio dataflow is already enabled 
             
             # start the vita49 source blocks
-#             self.SV49[tuner_id].start()
-#             self.DC[tuner_id].start()
-#             self.RSink[tuner_id].start()
+            self.SV49[tuner_id].start()
             print "deviceEnable(): Enable the given tuner  *********"
             
         else:
             # start the vita49 sink blocks
-#             tx_id = tuner_id - self.numDdc
-#             self.Tx_SV49[tx_id].start()
-#             self.Tx_DC[tx_id].start()      
+            tx_id = tuner_id - self.numDdc
+            self.Tx_SV49[tx_id].start()   
             print "deviceEnable(): Enable the given transmitter  *********"          
 
         # set the enabled flag
@@ -372,17 +388,14 @@ class NDRFEI_i(NDRFEI_base):
         ************************************************************'''
         
         if fts.tuner_type == "RX_DIGITIZER":                      
-#             # stop the vita49 source block
-#             self.SV49[tuner_id].stop()
-#             self.DC[tuner_id].stop()
-#             self.RSink[tuner_id].stop()
+            # stop the vita49 source block
+            self.SV49[tuner_id].stop()
             print "deviceDisable(): Disable the given tuner  *********"
 
         else:
-#             # stop the vita49 sink block
-#             tx_id = tuner_id - self.numDdc
-#             self.Tx_SV49[tx_id].stop()
-#             self.Tx_DC[tx_id].stop()
+            # stop the vita49 sink block
+            tx_id = tuner_id - self.numDdc
+            self.Tx_SV49[tx_id].stop()
             print "deviceDisable(): Disable the given transmitter  *********"
              
         # clear the enabled flag
@@ -490,46 +503,32 @@ class NDRFEI_i(NDRFEI_base):
             ethconf=crd.getInterfaceAddresses(fts.interface)
             fts.ip_address = ethconf[1]
             
-#             # create new Sourcevita49, dataconverter, and sink if needed and connect them
-#             if len(self.SV49) < (tuner_id+1):
-#                 # create modules
-#                 self.SV49.append(sb.launch("rh.SourceVITA49",execparams={"DEBUG_LEVEL":0}))
-#                 self.DC.append(sb.launch("rh.DataConverter"))
-#                 self.RSink.append(sb.launch("sink",execparams={"DEBUG_LEVEL":0,"lb_port":5000+tuner_id}))
-#                             
-#                 #create loopback port                
-#                 #self.RPorts.append(bulkio.InShortPort("dataShortLB_in", maxsize=self.DEFAULT_QUEUE_SIZE))
-#        
-#                 # connect the modules (the connection knows the data type so it is unambiguous)
-#                 self.SV49[tuner_id].connect(self.DC[tuner_id],usesPortName="dataShort_out")
-#                 self.DC[tuner_id].connect(self.RSink[tuner_id],usesPortName="dataFloat_out")
-#                 
-#                 #connect loopback port
-#                 #self.SV49[tuner_id].connect(self.Rports[tuner_id],usesPortName="dataShort_out")               
-#                 
-#                 # init sink so it has pointer to multi-out Port
-#                 #self.DC[tuner_id].connect(self.port_loopbackFloat,usesPortName="dataFloat_out")
-#                 
-#                 # create a non-blocking socket to connect
-#                 self.sock.append(socket.socket(socket.AF_INET,socket.SOCK_DGRAM))
-#                 self.sock[tuner_id].setblocking(0)
-#                 self.sock[tuner_id].bind(("127.0.0.1",5000+tuner_id))
-#                  
-#                 # create an sri for this stream
-#                 self.sris.append(bulkio.sri.create(request.allocation_id))
-#                         
-#             # configure the SourceVita49 module
-#             self.SV49[tuner_id].attachment_override.enabled=True
-#             #FIXME - need to set 10gbe interface load balanced
-#             self.SV49[tuner_id].interface="eth0"
-#             self.SV49[tuner_id].interface=fts.interface
-#             self.SV49[tuner_id].attachment_override.ip_address=fts.ip_address
-#             self.SV49[tuner_id].attachment_override.port=fts.port
-#             self.SV49[tuner_id].VITA49Processing_override.enable=True
-#             self.SV49[tuner_id].VITA49Processing_override.VRL_frames=True
-#             self.SV49[tuner_id].VITA49Processing_override.vector_size=1024
-#             self.SV49[tuner_id].VITA49Processing_override.vita49_packet_size=4136        
-#             self.SV49[tuner_id].VITA49Processing_override.byte_swap=True
+            # create new Sourcevita49 and connect to loopback port
+            if len(self.SV49) < (tuner_id+1):
+                # create vita49 source
+                self.SV49.append(sb.launch("rh.SourceVITA49",execparams={"DEBUG_LEVEL":4}))
+
+                #connect loopback port
+                sport = self.SV49[tuner_id].getPort("dataShort_out")
+                dport = self.getPort("dataShortLB_in")
+                sport.connectPort(dport,"lb_conn%d"%(tuner_id))
+
+                # create an sri for this stream
+                self.sris.append(bulkio.sri.create(request.allocation_id))                
+
+            # configure the SourceVita49 module
+            self.SV49[tuner_id].attachment_override.enabled=True
+            #FIXME - need to set 10gbe interface load balanced
+            self.SV49[tuner_id].interface="eth0"
+            self.SV49[tuner_id].interface=fts.interface
+            self.SV49[tuner_id].attachment_override.ip_address=fts.ip_address
+            self.SV49[tuner_id].attachment_override.port=fts.port
+            self.SV49[tuner_id].VITA49Processing_override.enable=True
+            self.SV49[tuner_id].VITA49Processing_override.VRL_frames=True
+            self.SV49[tuner_id].VITA49Processing_override.vector_size=1024
+            self.SV49[tuner_id].VITA49Processing_override.vita49_packet_size=4136        
+            self.SV49[tuner_id].VITA49Processing_override.byte_swap=True
+            self.SV49[tuner_id].streamID=request.allocation_id
             
             # refresh the configuration
             self.confdict=self.radio.getConfiguration()
@@ -620,26 +619,25 @@ class NDRFEI_i(NDRFEI_base):
             ipparts = ethconf[1].split('.')              
             fts.ip_address=ipparts[0]+'.'+ipparts[1]+'.'+ipparts[2]+'.1'
                       
-#             # create new Sinkvita49 and dataconverter if needed and connect them
-#             # note: the transmitters at the end of the receivers in the list so the first
-#             # transmitter is at id numDDc+1. This code instantiates the components only as needed. 
-#             if len(self.Tx_SV49) < (tx_id+1):
-#                 self.Tx_SV49.append(sb.launch("rh.SinkVITA49"))
-#                 self.Tx_DC.append(sb.launch("rh.DataConverter"))
-#                 self.Tx_DC[tx_id].connect(self.Tx_SV49[tx_id],usesPortName="dataShort_out")          
-#             
-#             # configure the SinkVita49 module 
-#             self.Tx_SV49[tx_id].network_settings.enabled=True
-#             self.Tx_SV49[tx_id].network_settings.port=fts.port
-#             self.Tx_SV49[tx_id].network_settings.ip_address=fts.ip_address
-#             #FIXME - need to set 10gbe interface load balanced
-#             self.Tx_SV49[tx_id].network_settings.interface=fts.interface
-#             self.Tx_SV49[tx_id].network_settings.use_udp_protocol=True
-# 
-#             self.Tx_SV49[tx_id].VITA49Encapsulation.enable_vrl_frames=True
-#             self.Tx_SV49[tx_id].VITA49IFContextPacket.enable2=False
-#             self.Tx_SV49[tx_id].advanced_configuration.force_transmit=True
-#             self.Tx_SV49[tx_id].advanced_configuration.max_payload_size=4096        
+            # create new Sinkvita49 blocks and configure them
+            # note: the transmitters at the end of the receivers in the list so the first
+            # transmitter is at id numDDc+1. This code instantiates the components only as needed. 
+            if len(self.Tx_SV49) < (tx_id+1):
+                self.Tx_SV49.append(sb.launch("rh.SinkVITA49"))                
+                self.Tx_SV49_ports.append(self.Tx_SV49[tx_id].getPort("dataShort_in"))  
+             
+            # configure the SinkVita49 module 
+            self.Tx_SV49[tx_id].network_settings.enabled=True
+            self.Tx_SV49[tx_id].network_settings.port=fts.port
+            self.Tx_SV49[tx_id].network_settings.ip_address=fts.ip_address
+            #FIXME - need to set 10gbe interface load balanced
+            self.Tx_SV49[tx_id].network_settings.interface=fts.interface
+            self.Tx_SV49[tx_id].network_settings.use_udp_protocol=True
+ 
+            self.Tx_SV49[tx_id].VITA49Encapsulation.enable_vrl_frames=True
+            self.Tx_SV49[tx_id].VITA49IFContextPacket.enable2=False
+            self.Tx_SV49[tx_id].advanced_configuration.force_transmit=True
+            self.Tx_SV49[tx_id].advanced_configuration.max_payload_size=4096        
 
             # refresh the configuration
             self.confdict=self.radio.getConfiguration()
@@ -721,7 +719,6 @@ class NDRFEI_i(NDRFEI_base):
 
     def getTunerCenterFrequency(self,allocation_id):
         idx = self.getTunerMapping(allocation_id)
-        #cep test
         self._log.debug("Frequency request : %d"%(idx))
         if idx < 0: raise FRONTEND.FrontendException("Invalid allocation id")
         return self.frontend_tuner_status[idx].center_frequency
